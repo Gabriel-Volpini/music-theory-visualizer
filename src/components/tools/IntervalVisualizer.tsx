@@ -77,7 +77,7 @@ export default function IntervalVisualizer() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">
-          <Instruments highlights={highlights} onPick={pick} pickHint="Click two notes to measure the interval" />
+          <Instruments highlights={highlights} onPick={pick} pickHint="Click two notes to measure the interval" plainPiano />
         <Legend
           items={[
             { color: A_COLOR, label: "Note A", ring: true },

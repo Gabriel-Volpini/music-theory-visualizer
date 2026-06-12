@@ -1,33 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useComposition } from "../../store/composition";
 import { getScale } from "../../theory/scales";
 import {
   borrowedSuggestions,
-  chordScaleSuggestions,
   diatonicSuggestions,
   secondaryDominantSuggestions,
-  type ChordScale,
   type ChordSuggestion,
   type PlacedChord,
 } from "../../theory/progression";
-import { suggestNextNotes } from "../../theory/solo";
-import { playChord, playNote, resumeAudio } from "../../theory/audio";
-import Instruments from "../Instruments";
-import Legend from "../Legend";
-import {
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
-  FUNCTION_COLORS,
-  chordHighlights,
-  scaleHighlights,
-  soloHighlights,
-} from "../palette";
-import ChordEditPanel from "./ChordEditPanel";
+import { playChord, resumeAudio } from "../../theory/audio";
+import { FUNCTION_COLORS } from "../palette";
 import ChordBuilder from "./ChordBuilder";
-
-const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-type Step = "chords" | "solo";
 
 export default function ChordSoloBuilder() {
   const {
@@ -35,18 +18,19 @@ export default function ChordSoloBuilder() {
     scaleType,
     builderChords,
     builderSelected,
-    solo,
     addBuilderChord,
     replaceBuilderChordAt,
     setBuilderChordBeats,
     removeBuilderChordAt,
     clearBuilder,
     setBuilderSelected,
-    toggleSoloNote,
   } = useComposition();
 
-  const [step, setStep] = useState<Step>("chords");
-  const [activeScale, setActiveScale] = useState<ChordScale | null>(null);
+  const [bpm, setBpm] = useState(180);
+  const [playing, setPlaying] = useState(false);
+  const [playIndex, setPlayIndex] = useState(-1);
+  const [loop, setLoop] = useState(true);
+  const timer = useRef<number | null>(null);
 
   const scale = useMemo(() => getScale(tonic, scaleType), [tonic, scaleType]);
   const groups = useMemo(
@@ -73,216 +57,107 @@ export default function ChordSoloBuilder() {
 
   const select = (i: number | null) => {
     setBuilderSelected(i);
-    setActiveScale(null);
     if (i != null && builderChords[i]) audition(builderChords[i].chromas);
   };
 
+  // Play header — steps through the built chords on the piano.
+  useEffect(() => {
+    if (!playing || builderChords.length === 0) return;
+    let cancelled = false;
+    let i = 0;
+    const beatMs = 60000 / bpm;
+    const sound = (idx: number) => {
+      const c = builderChords[idx];
+      if (c) playChord(c.chromas, { durationMs: c.beats * beatMs * 0.95 });
+    };
+    setPlayIndex(0);
+    resumeAudio();
+    sound(0);
+    const tick = () => {
+      const ms = (builderChords[i]?.beats ?? 4) * beatMs;
+      timer.current = window.setTimeout(() => {
+        if (cancelled) return;
+        const next = i + 1;
+        if (next >= builderChords.length) {
+          if (loop) {
+            i = 0;
+            setPlayIndex(0);
+            sound(0);
+            tick();
+          } else {
+            setPlaying(false);
+            setPlayIndex(-1);
+          }
+        } else {
+          i = next;
+          setPlayIndex(next);
+          sound(next);
+          tick();
+        }
+      }, ms);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer.current) window.clearTimeout(timer.current);
+    };
+  }, [playing, bpm, loop, builderChords]);
+
   return (
     <div className="space-y-5">
-      {/* Step switch */}
-      <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-700">
-        {(["chords", "solo"] as const).map((s, i) => (
-          <button
-            key={s}
-            onClick={() => setStep(s)}
-            className={
-              "px-4 py-2 text-sm font-medium transition " +
-              (step === s ? "bg-sky-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700")
-            }
-          >
-            {i + 1}. {s === "chords" ? "Chord Creator" : "Solo Creator"}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
+        <button
+          onClick={() => {
+            if (!playing) resumeAudio();
+            setPlaying((p) => !p);
+          }}
+          disabled={builderChords.length === 0}
+          className="rounded bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+        >
+          {playing ? "⏸ Stop" : "▶ Play"}
+        </button>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input type="range" min={50} max={200} value={bpm} onChange={(e) => setBpm(Number(e.target.value))} className="accent-sky-500" />
+          <span className="w-14 font-mono text-slate-100">{bpm} BPM</span>
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} className="accent-sky-500" />
+          Loop
+        </label>
       </div>
 
       <BuilderTimeline
         chords={builderChords}
         selected={builderSelected}
-        solo={solo}
-        step={step}
+        playIndex={playing ? playIndex : null}
         onSelect={select}
         onRemove={removeBuilderChordAt}
         onClear={clearBuilder}
       />
 
-      {step === "chords" ? (
-        <>
-          {/* Add chords */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {(["diatonic", "secondary", "borrowed"] as const).map((cat) => (
-              <div key={cat} className="rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
-                <h3 className="mb-2 text-sm font-semibold capitalize text-slate-200">{cat}</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {groups[cat].length === 0 && <span className="text-xs text-slate-600">Needs a 7-note scale.</span>}
-                  {groups[cat].map((c, i) => (
-                    <ChordChip key={`${cat}-${c.name}-${i}`} chord={c} onAdd={() => handleAdd(c)} />
-                  ))}
-                </div>
-              </div>
-            ))}
+      {/* Add chords */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {(["diatonic", "secondary", "borrowed"] as const).map((cat) => (
+          <div key={cat} className="rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
+            <h3 className="mb-2 text-sm font-semibold capitalize text-slate-200">{cat}</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {groups[cat].length === 0 && <span className="text-xs text-slate-600">Needs a 7-note scale.</span>}
+              {groups[cat].map((c, i) => (
+                <ChordChip key={`${cat}-${c.name}-${i}`} chord={c} onAdd={() => handleAdd(c)} />
+              ))}
+            </div>
           </div>
-
-          {/* Note-by-note chord builder with presets + live solo-fit */}
-          <ChordBuilder onAdd={handleAdd} />
-
-          {/* Edit selected chord (quality, inversion, substitution, scale) */}
-          {selected && builderSelected != null && (
-            <ChordEditPanel
-              chord={selected}
-              index={builderSelected}
-              tonic={tonic}
-              activeScale={activeScale}
-              onReplace={replaceBuilderChordAt}
-              onBeats={setBuilderChordBeats}
-              onPickScale={setActiveScale}
-            />
-          )}
-
-          {/* Instruments */}
-          {selected && (
-            <ChordInstruments chord={selected} activeScale={activeScale} />
-          )}
-        </>
-      ) : (
-        <SoloStep
-          chord={selected}
-          picked={selected ? solo[selected.uid] ?? [] : []}
-          onToggle={(chroma) => {
-            if (!selected) return;
-            resumeAudio();
-            playNote(chroma);
-            toggleSoloNote(selected.uid, chroma);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function ChordInstruments({ chord, activeScale }: { chord: PlacedChord; activeScale: ChordScale | null }) {
-  const highlights = activeScale
-    ? scaleHighlights(getScale(activeScale.tonic, activeScale.type), "tonal")
-    : chordHighlights(chord);
-  return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-300">
-        {activeScale ? `Scale: ${activeScale.tonic} ${activeScale.type}` : `${chord.label} · ${chord.name}`}{" "}
-        <span className="text-slate-500">
-          ({(activeScale ? getScale(activeScale.tonic, activeScale.type).notes.map((n) => n.name) : chord.notes).join(" ")})
-        </span>
-      </h3>
-      <Instruments highlights={highlights} />
-      <Legend
-        title="Function"
-        items={[
-          { color: FUNCTION_COLORS.Tonic, label: "Tonic", ring: true },
-          { color: FUNCTION_COLORS.Subdominant, label: "Subdominant" },
-          { color: FUNCTION_COLORS.Dominant, label: "Dominant" },
-        ]}
-      />
-    </div>
-  );
-}
-
-function SoloStep({
-  chord,
-  picked,
-  onToggle,
-}: {
-  chord: PlacedChord | null;
-  picked: number[];
-  onToggle: (chroma: number) => void;
-}) {
-  if (!chord) {
-    return (
-      <div className="rounded-lg bg-slate-900/60 p-6 text-center text-sm text-slate-500 ring-1 ring-slate-800">
-        Add and select a chord in the Chord Creator, then come here to build a line over it.
-      </div>
-    );
-  }
-
-  const fit = chordScaleSuggestions(chord)[0];
-  const scale = getScale(fit.tonic, fit.type);
-  const suggestions = suggestNextNotes(scale, chord.chromas, null);
-
-  const highlights = soloHighlights(suggestions, null);
-  picked.forEach((c) =>
-    highlights.set(c, { color: "#fbbf24", ring: true, sub: "solo", label: SHARP_NAMES[((c % 12) + 12) % 12] })
-  );
-
-  const playPhrase = () => {
-    resumeAudio();
-    playChord(chord.chromas, { durationMs: 1400 });
-    picked.forEach((c, i) => window.setTimeout(() => playNote(c, { durationMs: 320 }), 140 + i * 240));
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">
-            Notes that fit <span style={{ color: FUNCTION_COLORS[chord.fn] }}>{chord.name}</span>
-          </h3>
-          <span className="text-xs text-slate-500">
-            over {fit.tonic} {fit.type}
-          </span>
-        </div>
-        <p className="mb-3 text-[11px] text-slate-500">
-          Click notes to add them to your solo line over this chord — chord tones are the strongest
-          landing notes. {fit.reason}
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {suggestions.map((s) => {
-            const isPicked = picked.includes(s.chroma);
-            const color = CATEGORY_COLORS[s.category];
-            return (
-              <button
-                key={s.chroma}
-                onClick={() => onToggle(s.chroma)}
-                title={s.reason}
-                className="rounded px-2 py-1 text-xs font-medium ring-1 transition hover:brightness-125"
-                style={{
-                  backgroundColor: isPicked ? "#fbbf24" : color + "22",
-                  color: isPicked ? "#0b0b0b" : color,
-                  borderColor: isPicked ? "#fbbf24" : color,
-                }}
-              >
-                {s.note}
-              </button>
-            );
-          })}
-        </div>
+        ))}
       </div>
 
-      <div className="flex items-center gap-3 text-sm">
-        <button
-          onClick={playPhrase}
-          className="rounded bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-500"
-        >
-          ▶ Hear chord + solo
-        </button>
-        <span className="text-slate-400">
-          Your line:{" "}
-          {picked.length ? (
-            <span className="font-mono text-amber-300">
-              {picked.map((c) => SHARP_NAMES[((c % 12) + 12) % 12]).join(" – ")}
-            </span>
-          ) : (
-            <span className="text-slate-600">none yet</span>
-          )}
-        </span>
-      </div>
-
-      <Instruments highlights={highlights} onPick={onToggle} pickHint="Click notes to build your line" />
-      <Legend
-        title="Fit"
-        items={[
-          { color: "#fbbf24", label: "In your solo", ring: true },
-          ...(["chord-tone", "step", "color", "avoid", "scale"] as const).map((c) => ({
-            color: CATEGORY_COLORS[c],
-            label: CATEGORY_LABELS[c],
-          })),
-        ]}
+      {/* One note-by-note builder, editing the selected chord (or building a new one) */}
+      <ChordBuilder
+        tonic={tonic}
+        chord={selected}
+        onReplace={(c) => builderSelected != null && replaceBuilderChordAt(builderSelected, c)}
+        onAdd={handleAdd}
+        onBeats={(beats) => builderSelected != null && setBuilderChordBeats(builderSelected, beats)}
+        onNew={() => setBuilderSelected(null)}
       />
     </div>
   );
@@ -305,16 +180,14 @@ function ChordChip({ chord, onAdd }: { chord: ChordSuggestion; onAdd: () => void
 function BuilderTimeline({
   chords,
   selected,
-  solo,
-  step,
+  playIndex,
   onSelect,
   onRemove,
   onClear,
 }: {
   chords: PlacedChord[];
   selected: number | null;
-  solo: Record<string, number[]>;
-  step: Step;
+  playIndex: number | null;
   onSelect: (i: number | null) => void;
   onRemove: (i: number) => void;
   onClear: () => void;
@@ -322,9 +195,7 @@ function BuilderTimeline({
   return (
     <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-200">
-          Your chords {step === "solo" && <span className="text-slate-500">· pick one to solo over</span>}
-        </h2>
+        <h2 className="text-sm font-semibold text-slate-200">Your chords</h2>
         {chords.length > 0 && (
           <button onClick={onClear} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
             Clear
@@ -333,22 +204,23 @@ function BuilderTimeline({
       </div>
       {chords.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-500">
-          Add chords below (or build a custom one), then switch to the Solo Creator to write a line.
+          Add chords from the suggestions below, or build a custom one note-by-note.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {chords.map((c, i) => {
             const color = FUNCTION_COLORS[c.fn];
-            const soloCount = solo[c.uid]?.length ?? 0;
+            const isPlaying = playIndex === i;
             return (
               <button
                 key={c.uid}
                 onClick={() => onSelect(i)}
                 className="group relative w-24 rounded-lg p-2 text-left ring-1 transition hover:brightness-110"
                 style={{
-                  backgroundColor: color + "1f",
+                  backgroundColor: color + (isPlaying ? "40" : "1f"),
                   borderColor: color,
-                  boxShadow: selected === i ? `0 0 0 2px ${color}` : undefined,
+                  boxShadow:
+                    selected === i || isPlaying ? `0 0 0 2px ${isPlaying ? "#fff" : color}` : undefined,
                 }}
               >
                 <div className="text-[11px] font-mono" style={{ color }}>
@@ -356,9 +228,6 @@ function BuilderTimeline({
                 </div>
                 <div className="text-base font-bold text-white">{c.name}</div>
                 <div className="truncate text-[10px] text-slate-400">{c.notes.join(" ")}</div>
-                {soloCount > 0 && (
-                  <div className="mt-0.5 text-[9px] text-amber-300">♪ {soloCount} solo</div>
-                )}
                 <span
                   onClick={(e) => {
                     e.stopPropagation();

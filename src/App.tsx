@@ -16,7 +16,7 @@ const TABS: { id: ToolId; label: string; blurb: string }[] = [
   { id: "solo", label: "Solo Helper", blurb: "Get ranked next-note suggestions over the active chord." },
   { id: "modulation", label: "Modulation", blurb: "Find where to go next and the pivot chords that bridge the two keys." },
   { id: "canvas", label: "Composition Canvas", blurb: "Build a progression with chord suggestions, then write a melody over it on the piano-roll below." },
-  { id: "builder", label: "Chord + Solo Builder", blurb: "Step 1: create & edit chords (add 7ths, invert, reharmonize). Step 2: build a solo from the notes that fit each chord." },
+  { id: "builder", label: "Chord Builder", blurb: "Create chords from suggestions or note-by-note, then edit them — add 7ths, invert, reharmonize." },
 ];
 
 function ToolView({ tool }: { tool: ToolId }) {

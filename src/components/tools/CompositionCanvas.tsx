@@ -56,7 +56,7 @@ export default function CompositionCanvas() {
     setKey,
   } = useComposition();
 
-  const [bpm, setBpm] = useState(100);
+  const [bpm, setBpm] = useState(180);
   const [playing, setPlaying] = useState(false);
   const [playIndex, setPlayIndex] = useState(0);
   const [loop, setLoop] = useState(true);
@@ -358,6 +358,7 @@ export default function CompositionCanvas() {
           </h3>
           <Instruments
             highlights={highlights}
+            collapsible
             onPick={(chroma) => {
               if (muted) return;
               resumeAudio();

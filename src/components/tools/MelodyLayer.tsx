@@ -17,7 +17,7 @@ interface Col {
 
 export default function MelodyLayer() {
   const { tonic, scaleType, progression, melody, setMelodyNote, clearMelody } = useComposition();
-  const [bpm, setBpm] = useState(100);
+  const [bpm, setBpm] = useState(180);
   const [playing, setPlaying] = useState(false);
   const [playCol, setPlayCol] = useState(-1);
   const timer = useRef<number | null>(null);

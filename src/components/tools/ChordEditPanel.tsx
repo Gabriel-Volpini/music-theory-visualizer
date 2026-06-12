@@ -49,19 +49,13 @@ export default function ChordEditPanel({
         </h3>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           Duration
-          <button
-            onClick={() => onBeats(index, chord.beats - 1)}
-            className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
-          >
+          <button onClick={() => onBeats(index, chord.beats - 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">
             –
           </button>
           <span className="w-16 text-center font-mono text-slate-100">
             {chord.beats} {chord.beats === 1 ? "beat" : "beats"}
           </span>
-          <button
-            onClick={() => onBeats(index, chord.beats + 1)}
-            className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
-          >
+          <button onClick={() => onBeats(index, chord.beats + 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">
             +
           </button>
         </div>
@@ -69,13 +63,7 @@ export default function ChordEditPanel({
 
       <Section title="Quality / extensions">
         {variants.map((v) => (
-          <Pill
-            key={v.name}
-            active={v.name === chord.name}
-            color={color}
-            onClick={() => onReplace(index, v)}
-            title={v.explanation}
-          >
+          <Pill key={v.name} active={v.name === chord.name} color={color} onClick={() => onReplace(index, v)} title={v.explanation}>
             {v.name}
           </Pill>
         ))}
@@ -99,12 +87,7 @@ export default function ChordEditPanel({
 
       <Section title="Reharmonize (substitutions)">
         {subs.map((s) => (
-          <Pill
-            key={s.name + s.label}
-            color={FUNCTION_COLORS[s.fn]}
-            onClick={() => onReplace(index, s)}
-            title={s.explanation}
-          >
+          <Pill key={s.name + s.label} color={FUNCTION_COLORS[s.fn]} onClick={() => onReplace(index, s)} title={s.explanation}>
             {s.name} <span className="opacity-60">{s.label}</span>
           </Pill>
         ))}
@@ -126,21 +109,17 @@ export default function ChordEditPanel({
           </Pill>
         ))}
         {activeScale && (
-          <p className="mt-1 w-full text-[11px] text-slate-400">
-            {scales.find((s) => s.type === activeScale.type)?.reason}
-          </p>
+          <p className="mt-1 w-full text-[11px] text-slate-400">{scales.find((s) => s.type === activeScale.type)?.reason}</p>
         )}
       </Section>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-        {title}
-      </div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );

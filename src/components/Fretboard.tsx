@@ -1,5 +1,5 @@
 import { useComposition } from "../store/composition";
-import { chromaOf } from "../theory/scales";
+import { chromaOf, getScale } from "../theory/scales";
 import { functionColor, type NoteHighlight } from "./palette";
 
 interface FretboardProps {
@@ -26,9 +26,12 @@ function fallbackName(chroma: number): string {
   return SHARP_NAMES[((chroma % 12) + 12) % 12];
 }
 
+const GRAY_BG = "#1e293b";
+
 export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardProps) {
-  const { tonic } = useComposition();
+  const { tonic, scaleType } = useComposition();
   const tonicChroma = chromaOf(tonic);
+  const scaleSet = getScale(tonic, scaleType).chromaSet;
   const fnColor = (chroma: number) => functionColor(pc(chroma - tonicChroma));
   const width = NUT_X + frets * FRET_W + 16;
   const height = TOP + 5 * STRING_GAP + 36;
@@ -121,45 +124,33 @@ export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardP
               const chroma = (open + f) % 12;
               const hl = highlights.get(chroma);
               const cx = dotX(f);
-              // Unused positions: a small function-colored outline only.
-              if (!hl) {
-                return (
-                  <circle
-                    key={`o-${s}-${f}`}
-                    cx={cx}
-                    cy={y}
-                    r={6}
-                    fill="none"
-                    stroke={fnColor(chroma)}
-                    strokeWidth={1.5}
-                    opacity={0.4}
-                    onClick={() => onPick?.(chroma)}
-                    style={{ cursor: onPick ? "pointer" : "default" }}
-                  />
-                );
+              const inScale = scaleSet.has(chroma);
+              const fc = fnColor(chroma);
+              // Three states, matching the piano: selected / in-scale / out-of-scale.
+              let bg = GRAY_BG;
+              let border = "#475569";
+              let font = "#94a3b8";
+              if (hl) {
+                bg = hl.color;
+                border = hl.color;
+                font = "#0b0b0b";
+              } else if (inScale) {
+                border = fc;
+                font = fc;
               }
               return (
                 <g
                   key={`n-${s}-${f}`}
                   onClick={() => onPick?.(chroma)}
                   style={{ cursor: onPick ? "pointer" : "default" }}
-                  opacity={hl.dim ? 0.5 : 1}
+                  opacity={hl?.dim ? 0.5 : hl || inScale ? 1 : 0.5}
                 >
-                  {hl.ring && (
-                    <circle cx={cx} cy={y} r={15} fill="none" stroke="#fff" strokeWidth={2} />
-                  )}
-                  <circle cx={cx} cy={y} r={12} fill={hl.color} />
-                  <text
-                    x={cx}
-                    y={y + 4}
-                    textAnchor="middle"
-                    fontSize={11}
-                    fontWeight={600}
-                    fill="#0b0b0b"
-                  >
-                    {hl.label ?? fallbackName(chroma)}
+                  {hl?.ring && <circle cx={cx} cy={y} r={15} fill="none" stroke="#fff" strokeWidth={2} />}
+                  <circle cx={cx} cy={y} r={12} fill={bg} stroke={border} strokeWidth={2} />
+                  <text x={cx} y={y + 4} textAnchor="middle" fontSize={10} fontWeight={600} fill={font}>
+                    {hl?.label ?? fallbackName(chroma)}
                   </text>
-                  {hl.sub && (
+                  {hl?.sub && (
                     <text x={cx} y={y - 17} textAnchor="middle" fontSize={9} fill="#cbd5e1">
                       {hl.sub}
                     </text>
