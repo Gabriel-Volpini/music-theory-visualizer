@@ -1,4 +1,4 @@
-import { diatonicChords, getScale, chromaOf, type ScaleInfo } from "./scales";
+import { diatonicChords, getScale, chromaOf, TONICS, type ScaleInfo } from "./scales";
 
 export interface PivotChord {
   /** Chord name as spelled in the source key. */
@@ -94,4 +94,69 @@ export function suggestModulations(tonic: string, type: string): ModulationTarge
   });
 
   return targets.sort((a, b) => b.sharedCount - a.sharedCount);
+}
+
+export interface PathStep {
+  toTonic: string;
+  toType: string;
+  toLabel: string;
+  relationship: string;
+  pivots: PivotChord[];
+}
+
+/**
+ * Shortest route between two keys, hopping through the smooth single-step
+ * modulations (relative, V, IV, parallel, …). Returns the ordered steps, an
+ * empty array if you're already there, or null if no route exists.
+ */
+export function findModulationPath(
+  startTonic: string,
+  startType: string,
+  endTonic: string,
+  endType: "major" | "minor"
+): PathStep[] | null {
+  const startFam: "major" | "minor" = MAJOR_FAMILY.has(startType) ? "major" : "minor";
+  const id = (chroma: number, type: string) => `${chroma}-${type}`;
+  const startId = id(chromaOf(startTonic), startFam);
+  const endId = id(chromaOf(endTonic), endType);
+  if (startId === endId) return [];
+
+  const visited = new Set<string>([startId]);
+  const queue: { chroma: number; type: "major" | "minor" }[] = [
+    { chroma: chromaOf(startTonic), type: startFam },
+  ];
+  const prev = new Map<string, { parent: string; step: PathStep }>();
+
+  while (queue.length) {
+    const cur = queue.shift()!;
+    const curId = id(cur.chroma, cur.type);
+    for (const t of suggestModulations(TONICS[cur.chroma], cur.type)) {
+      const nc = chromaOf(t.tonic);
+      const nid = id(nc, t.type);
+      if (visited.has(nid)) continue;
+      visited.add(nid);
+      prev.set(nid, {
+        parent: curId,
+        step: {
+          toTonic: t.tonic,
+          toType: t.type,
+          toLabel: t.label,
+          relationship: t.relationship,
+          pivots: t.pivots,
+        },
+      });
+      if (nid === endId) {
+        const steps: PathStep[] = [];
+        let walk = endId;
+        while (walk !== startId) {
+          const p = prev.get(walk)!;
+          steps.unshift(p.step);
+          walk = p.parent;
+        }
+        return steps;
+      }
+      queue.push({ chroma: nc, type: t.type as "major" | "minor" });
+    }
+  }
+  return null;
 }

@@ -1,14 +1,16 @@
 import { useComposition } from "../store/composition";
-import { SCALE_TYPES, TONICS, type ScaleTypeOption } from "../theory/scales";
+import { SCALE_TYPES, TONICS, getScale, type ScaleTypeOption } from "../theory/scales";
 import { isMode } from "../theory/modes";
+import { playNote, resumeAudio } from "../theory/audio";
 import Legend from "./Legend";
-import { FUNCTION_COLORS } from "./palette";
+import { FUNCTION_COLORS, functionColor } from "./palette";
 
 const GROUPS: ScaleTypeOption["group"][] = ["Major modes", "Minor modes", "Other"];
 
 export default function ScalePicker() {
   const { tonic, scaleType, lens, tool, setTonic, setScaleType, setLens } = useComposition();
   const lensAvailable = isMode(scaleType);
+  const scale = getScale(tonic, scaleType);
   // The tonal/modal lens only changes the Scale Visualizer, so only show it there.
   const showLens = tool === "scale";
 
@@ -47,6 +49,29 @@ export default function ScalePicker() {
           ))}
         </select>
       </label>
+
+      <div className="flex flex-col gap-1 text-xs text-slate-400">
+        Notes
+        <div className="flex h-[42px] flex-wrap items-center gap-1">
+          {scale.notes.map((n) => {
+            const color = functionColor(n.semitone);
+            return (
+              <button
+                key={n.chroma}
+                onClick={() => {
+                  resumeAudio();
+                  playNote(n.chroma);
+                }}
+                title="Click to hear"
+                className="rounded px-1.5 py-0.5 text-sm font-semibold ring-1 transition hover:brightness-125"
+                style={{ color, borderColor: color, backgroundColor: color + "1a" }}
+              >
+                {n.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="flex flex-col gap-1 text-xs text-slate-400">
         Note colors

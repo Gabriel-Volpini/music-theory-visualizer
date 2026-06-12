@@ -4,7 +4,6 @@ import ScaleVisualizer from "./components/tools/ScaleVisualizer";
 import SoloHelper from "./components/tools/SoloHelper";
 import ModulationTool from "./components/tools/ModulationTool";
 import ChordSoloBuilder from "./components/tools/ChordSoloBuilder";
-import CircleOfFifths from "./components/tools/CircleOfFifths";
 import IntervalVisualizer from "./components/tools/IntervalVisualizer";
 
 const TABS: { id: ToolId; label: string; blurb: string }[] = [
@@ -24,14 +23,7 @@ function ToolView({ tool }: { tool: ToolId }) {
     case "solo":
       return <SoloHelper />;
     case "modulation":
-      return (
-        <div className="space-y-8">
-          <CircleOfFifths />
-          <section className="border-t border-slate-800 pt-6">
-            <ModulationTool />
-          </section>
-        </div>
-      );
+      return <ModulationTool />;
     case "scale":
     default:
       return <ScaleVisualizer />;

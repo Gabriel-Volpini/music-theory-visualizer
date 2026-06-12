@@ -1,9 +1,13 @@
 import { useMemo } from "react";
 import { useComposition } from "../../store/composition";
-import { chromaOf, getScale } from "../../theory/scales";
+import { chromaOf, diatonicChords, getScale } from "../../theory/scales";
 import { suggestModulations } from "../../theory/modulation";
+import { playChord, resumeAudio } from "../../theory/audio";
 import Instruments from "../Instruments";
 import Legend from "../Legend";
+import CircleOfFifths, { PREVIEW_RING } from "./CircleOfFifths";
+import ModulationFlow from "./ModulationFlow";
+import ModulationPath from "./ModulationPath";
 import {
   FUNCTION_COLORS,
   LEAVING_TONE,
@@ -29,11 +33,19 @@ export default function ModulationTool() {
     () => (modPreview ? getScale(modPreview.tonic, modPreview.type) : null),
     [modPreview]
   );
+  const chords = useMemo(() => diatonicChords(source), [source]);
 
   const highlights = useMemo(
     () => modulationHighlights(source, targetScale),
     [source, targetScale]
   );
+
+  const playKeyChord = () => {
+    if (chords[0]) {
+      resumeAudio();
+      playChord(chords[0].chromas, { durationMs: 900 });
+    }
+  };
 
   // A list row is "active" when it matches the previewed key (match by pitch, not spelling).
   const isActive = (t: { tonic: string; type: string }) =>
@@ -42,141 +54,202 @@ export default function ModulationTool() {
     setModPreview(isActive(t) ? null : { tonic: t.tonic, type: t.type });
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+    <div className="space-y-6">
+      {/* Row 1 — key summary + how to read, stacked. */}
       <div className="space-y-4">
-        <Instruments highlights={highlights} />
-        {targetScale && modPreview ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
-              <span className="text-sm text-slate-300">
-                Previewing <span className="font-semibold text-white">{targetScale.label}</span>
-              </span>
-              <div className="ml-auto flex gap-2">
-                <button
-                  onClick={() => setKey(modPreview.tonic, modPreview.type)}
-                  className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-                >
-                  Switch to it →
-                </button>
-                <button
-                  onClick={() => setModPreview(null)}
-                  className="rounded bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <Legend
-              title="Comparison"
-              items={[
-                { color: SHARED_TONE, label: "Shared (pivot freely)" },
-                { color: NEW_TONE, label: "New in target key", ring: true },
-                { color: LEAVING_TONE, label: "Leaving (only in current)" },
-              ]}
-            />
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">
-            Showing <span className="font-semibold text-white">{source.label}</span>. Pick a
-            destination on the right — or click a key on the circle above — to see shared vs. new
-            notes and the pivot chords that bridge the two keys.
-          </p>
-        )}
-      </div>
-
-      <aside className="space-y-3">
         <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
-          <h3 className="text-sm font-semibold text-slate-200">
-            Modulate from {source.label}
-          </h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Ranked by shared notes — top suggestions are the smoothest moves.
-          </p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">{source.label}</h2>
+            {chords.length > 0 && (
+              <button onClick={playKeyChord} className="rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700">
+                ▶ Tonic chord
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-slate-400">{source.notes.map((n) => n.name).join(" – ")}</p>
         </div>
 
-        <ul className="space-y-2">
-          {targets.map((t) => {
-            const active = isActive(t);
-            return (
-              <li key={`${t.tonic}-${t.type}`}>
-                <button
-                  onClick={() => toggle(t)}
-                  className={
-                    "w-full rounded-lg p-3 text-left ring-1 transition " +
-                    (active
-                      ? "bg-sky-600/15 ring-sky-500"
-                      : "bg-slate-900/60 ring-slate-800 hover:ring-slate-600")
-                  }
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">{t.label}</span>
-                    <span className="text-[11px] text-slate-400">{t.sharedCount}/7 shared</span>
-                  </div>
-                  <div
-                    className="text-xs font-medium"
-                    style={{ color: relationshipColor(t.relationship) }}
+        <div className="rounded-lg bg-slate-900/60 p-4 text-sm text-slate-300 ring-1 ring-slate-800">
+          <p className="mb-2 font-semibold text-slate-200">How to read it</p>
+          <ul className="space-y-1.5 text-xs text-slate-400">
+            <li>Each step clockwise adds a sharp (a perfect fifth up); counter-clockwise adds a flat.</li>
+            <li>
+              <span style={{ color: FUNCTION_COLORS.Tonic }}>Green</span> is your selected key (major or
+              minor). The next key <span style={{ color: FUNCTION_COLORS.Dominant }}>clockwise is its
+              Dominant (V)</span> and the next <span style={{ color: FUNCTION_COLORS.Subdominant }}>
+              counter-clockwise is its Subdominant (IV)</span> — these differ by just one note, so
+              they're the smoothest keys to modulate to.
+            </li>
+            <li>
+              <span style={{ color: "#22d3ee" }}>Teal</span> marks the relative key on the other ring —
+              it has the exact same notes (e.g. C major ↔ A minor).
+            </li>
+            <li>The inner ring is each major key's relative minor.</li>
+            <li>
+              <span className="text-slate-300">Single-click</span> any key to{" "}
+              <span style={{ color: PREVIEW_RING }}>preview</span> modulating there — the keyboard below
+              shows shared vs. new notes. <span className="text-slate-300">Double-click</span> (or{" "}
+              <span className="text-slate-300">Switch to…</span>) to commit and change your key.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Row 2 — circle + keyboard (left) + modulate options (right). */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
+        <div className="space-y-4">
+          <CircleOfFifths />
+
+          <Instruments highlights={highlights} toggle />
+          {targetScale && modPreview ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
+                <span className="text-sm text-slate-300">
+                  Previewing <span className="font-semibold text-white">{targetScale.label}</span>
+                </span>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    onClick={() => setKey(modPreview.tonic, modPreview.type)}
+                    className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
                   >
-                    {t.relationship}
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-400">{t.blurb}</p>
+                    Switch to it →
+                  </button>
+                  <button
+                    onClick={() => setModPreview(null)}
+                    className="rounded bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <Legend
+                title="Comparison"
+                items={[
+                  { color: SHARED_TONE, label: "Shared (pivot freely)" },
+                  { color: NEW_TONE, label: "New in target key", ring: true },
+                  { color: LEAVING_TONE, label: "Leaving (only in current)" },
+                ]}
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">
+              Showing <span className="font-semibold text-white">{source.label}</span>. Pick a
+              destination on the right — or click a key on the circle — to see shared vs. new notes
+              and the pivot chords that bridge the two keys.
+            </p>
+          )}
+        </div>
 
-                  {active && (
-                    <div className="mt-3 space-y-2 border-t border-slate-700 pt-3">
-                      {t.pivots.length > 0 ? (
-                        <div>
-                          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                            Pivot chords
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {t.pivots.map((p) => (
-                              <span
-                                key={p.name}
-                                className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                                title={`${p.sourceRoman} in ${source.label} = ${p.targetRoman} in ${t.label}`}
-                              >
-                                <span className="font-semibold text-white">{p.name}</span>{" "}
-                                <span className="text-slate-400">
-                                  {p.sourceRoman}→{p.targetRoman}
-                                </span>
-                              </span>
-                            ))}
-                          </div>
-                          <p className="mt-1.5 text-[11px] text-slate-500">
-                            Play one of these, then resolve into the new key — the listener won't
-                            feel the seam.
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-slate-500">
-                          No common diatonic chord — use a direct (phrase) modulation or a shared
-                          single note as the link.
-                        </p>
-                      )}
+        <aside className="flex h-full flex-col space-y-3">
+          <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
+            <h3 className="text-sm font-semibold text-slate-200">
+              Modulate from {source.label}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Ranked by shared notes — top suggestions are the smoothest moves.
+            </p>
+          </div>
 
-                      {t.newNotes.length > 0 && (
-                        <p className="text-[11px] text-slate-400">
-                          New notes:{" "}
-                          <span className="text-amber-300">{t.newNotes.join(", ")}</span>
-                        </p>
-                      )}
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setKey(t.tonic, t.type);
-                        }}
-                        className="mt-1 w-full rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-                      >
-                        Switch to {t.label} →
-                      </button>
+          <ul className="flex-1 space-y-2 overflow-y-auto pr-1">
+            {targets.map((t) => {
+              const active = isActive(t);
+              return (
+                <li key={`${t.tonic}-${t.type}`}>
+                  <button
+                    onClick={() => toggle(t)}
+                    className={
+                      "w-full rounded-lg p-3 text-left ring-1 transition " +
+                      (active
+                        ? "bg-sky-600/15 ring-sky-500"
+                        : "bg-slate-900/60 ring-slate-800 hover:ring-slate-600")
+                    }
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-white">{t.label}</span>
+                      <span className="text-[11px] text-slate-400">{t.sharedCount}/7 shared</span>
                     </div>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
+                    <div
+                      className="text-xs font-medium"
+                      style={{ color: relationshipColor(t.relationship) }}
+                    >
+                      {t.relationship}
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-400">{t.blurb}</p>
+
+                    {active && (
+                      <div className="mt-3 space-y-2 border-t border-slate-700 pt-3">
+                        {t.pivots.length > 0 ? (
+                          <div>
+                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                              Pivot chords
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {t.pivots.map((p) => (
+                                <span
+                                  key={p.name}
+                                  className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200"
+                                  title={`${p.sourceRoman} in ${source.label} = ${p.targetRoman} in ${t.label}`}
+                                >
+                                  <span className="font-semibold text-white">{p.name}</span>{" "}
+                                  <span className="text-slate-400">
+                                    {p.sourceRoman}→{p.targetRoman}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-slate-500">
+                              Play one of these, then resolve into the new key — the listener won't
+                              feel the seam.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">
+                            No common diatonic chord — use a direct (phrase) modulation or a shared
+                            single note as the link.
+                          </p>
+                        )}
+
+                        {t.newNotes.length > 0 && (
+                          <p className="text-[11px] text-slate-400">
+                            New notes:{" "}
+                            <span className="text-amber-300">{t.newNotes.join(", ")}</span>
+                          </p>
+                        )}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKey(t.tonic, t.type);
+                          }}
+                          className="mt-1 w-full rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+                        >
+                          Switch to {t.label} →
+                        </button>
+                      </div>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      </div>
+
+      {/* Divider + modulation map. */}
+      <div className="border-t border-slate-800 pt-6">
+        <h2 className="text-sm font-semibold text-slate-200">Modulation map</h2>
+        <p className="mt-0.5 mb-4 text-xs text-slate-500">
+          From <span className="font-semibold text-slate-300">{source.label}</span>, each branch shows
+          where you can go and the pivot chord that bridges the two keys. Click a target to preview it
+          above; double-click to switch.
+        </p>
+        <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
+          <ModulationFlow />
+        </div>
+      </div>
+
+      {/* Route planner — get from any key to any other key. */}
+      <ModulationPath />
     </div>
   );
 }

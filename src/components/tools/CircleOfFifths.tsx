@@ -1,7 +1,6 @@
 import { useComposition } from "../../store/composition";
-import { TONICS, chromaOf, diatonicChords, getScale } from "../../theory/scales";
+import { TONICS, chromaOf } from "../../theory/scales";
 import { FUNCTION_COLORS } from "../palette";
-import { playChord, resumeAudio } from "../../theory/audio";
 
 // Clockwise by fifths, conventional spellings for readability.
 const MAJORS = ["C", "G", "D", "A", "E", "B", "Gb", "Db", "Ab", "Eb", "Bb", "F"];
@@ -13,10 +12,11 @@ const C = SIZE / 2;
 const R_MAJOR = 150;
 const R_MINOR = 96;
 
-const PREVIEW_RING = "#f59e0b"; // amber — the key being previewed on the keyboard
+export const PREVIEW_RING = "#f59e0b"; // amber — the key being previewed on the keyboard
 
+/** The circle-of-fifths wheel. Clicking a key previews modulating there (shared store). */
 export default function CircleOfFifths() {
-  const { tonic, scaleType, modPreview, setModPreview } = useComposition();
+  const { tonic, scaleType, modPreview, setModPreview, setKey } = useComposition();
   const tonicChroma = chromaOf(tonic);
   const isMajorKey = MAJOR_FAMILY.has(scaleType);
 
@@ -26,6 +26,8 @@ export default function CircleOfFifths() {
     if (modPreview && modPreview.tonic === t && modPreview.type === type) setModPreview(null);
     else setModPreview({ tonic: t, type });
   };
+  // Double-click commits: switch the active scale to that key.
+  const commit = (chroma: number, type: "major" | "minor") => setKey(TONICS[chroma], type);
   const isPreview = (chroma: number, type: "major" | "minor") =>
     modPreview != null && chromaOf(modPreview.tonic) === chroma && modPreview.type === type;
 
@@ -62,125 +64,75 @@ export default function CircleOfFifths() {
   const BRIGHT = [FUNCTION_COLORS.Tonic, FUNCTION_COLORS.Subdominant, FUNCTION_COLORS.Dominant];
   const textFor = (fill: string) => (BRIGHT.includes(fill) ? "#0b0b0b" : "#e2e8f0");
 
-  const scale = getScale(tonic, scaleType);
-  const chords = diatonicChords(scale);
-
-  const playKeyChord = () => {
-    if (chords[0]) {
-      resumeAudio();
-      playChord(chords[0].chromas, { durationMs: 900 });
-    }
-  };
-
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
-      <div>
-        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-md select-none" role="img" aria-label="Circle of fifths">
-          <circle cx={C} cy={C} r={R_MAJOR + 26} fill="none" stroke="#1e293b" strokeWidth={1} />
-          <circle cx={C} cy={C} r={R_MINOR + 22} fill="none" stroke="#1e293b" strokeWidth={1} />
+    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-md select-none" role="img" aria-label="Circle of fifths">
+      <circle cx={C} cy={C} r={R_MAJOR + 26} fill="none" stroke="#1e293b" strokeWidth={1} />
+      <circle cx={C} cy={C} r={R_MINOR + 22} fill="none" stroke="#1e293b" strokeWidth={1} />
 
-          {MAJORS.map((name, i) => {
-            const { x, y } = pos(i, R_MAJOR);
-            const fill = majorFill(i);
-            const active = isMajorKey && i === activeIndex;
-            const previewing = isPreview(majorChromas[i], "major");
-            const textColor = textFor(fill);
-            return (
-              <g
-                key={`maj-${name}`}
-                onClick={() => preview(majorChromas[i], "major")}
-                style={{ cursor: "pointer" }}
-              >
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={24}
-                  fill={fill}
-                  stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
-                  strokeWidth={active || previewing ? 3 : 1}
-                  strokeDasharray={previewing ? "4 3" : undefined}
-                />
-                <text x={x} y={y + 5} textAnchor="middle" fontSize={16} fontWeight={700} fill={textColor}>
-                  {name}
-                </text>
-              </g>
-            );
-          })}
+      {MAJORS.map((name, i) => {
+        const { x, y } = pos(i, R_MAJOR);
+        const fill = majorFill(i);
+        const active = isMajorKey && i === activeIndex;
+        const previewing = isPreview(majorChromas[i], "major");
+        const textColor = textFor(fill);
+        return (
+          <g
+            key={`maj-${name}`}
+            onClick={() => preview(majorChromas[i], "major")}
+            onDoubleClick={() => commit(majorChromas[i], "major")}
+            style={{ cursor: "pointer" }}
+          >
+            <circle
+              cx={x}
+              cy={y}
+              r={24}
+              fill={fill}
+              stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
+              strokeWidth={active || previewing ? 3 : 1}
+              strokeDasharray={previewing ? "4 3" : undefined}
+            />
+            <text x={x} y={y + 5} textAnchor="middle" fontSize={16} fontWeight={700} fill={textColor}>
+              {name}
+            </text>
+          </g>
+        );
+      })}
 
-          {MINORS.map((name, i) => {
-            const { x, y } = pos(i, R_MINOR);
-            const fill = minorFill(i);
-            const active = !isMajorKey && i === activeIndex;
-            const previewing = isPreview(minorChromas[i], "minor");
-            const textColor = textFor(fill);
-            return (
-              <g
-                key={`min-${name}`}
-                onClick={() => preview(minorChromas[i], "minor")}
-                style={{ cursor: "pointer" }}
-              >
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={19}
-                  fill={fill}
-                  stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
-                  strokeWidth={active || previewing ? 3 : 1}
-                  strokeDasharray={previewing ? "4 3" : undefined}
-                />
-                <text x={x} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fill={textColor}>
-                  {name}m
-                </text>
-              </g>
-            );
-          })}
+      {MINORS.map((name, i) => {
+        const { x, y } = pos(i, R_MINOR);
+        const fill = minorFill(i);
+        const active = !isMajorKey && i === activeIndex;
+        const previewing = isPreview(minorChromas[i], "minor");
+        const textColor = textFor(fill);
+        return (
+          <g
+            key={`min-${name}`}
+            onClick={() => preview(minorChromas[i], "minor")}
+            onDoubleClick={() => commit(minorChromas[i], "minor")}
+            style={{ cursor: "pointer" }}
+          >
+            <circle
+              cx={x}
+              cy={y}
+              r={19}
+              fill={fill}
+              stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
+              strokeWidth={active || previewing ? 3 : 1}
+              strokeDasharray={previewing ? "4 3" : undefined}
+            />
+            <text x={x} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fill={textColor}>
+              {name}m
+            </text>
+          </g>
+        );
+      })}
 
-          <text x={C} y={C - 6} textAnchor="middle" fontSize={11} fill="#475569">
-            major
-          </text>
-          <text x={C} y={C + 8} textAnchor="middle" fontSize={11} fill="#475569">
-            minor
-          </text>
-        </svg>
-      </div>
-
-      <aside className="space-y-4">
-        <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white">{scale.label}</h2>
-            {chords.length > 0 && (
-              <button onClick={playKeyChord} className="rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700">
-                ▶ Tonic chord
-              </button>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-slate-400">{scale.notes.map((n) => n.name).join(" – ")}</p>
-        </div>
-
-        <div className="rounded-lg bg-slate-900/60 p-4 text-sm text-slate-300 ring-1 ring-slate-800">
-          <p className="mb-2 font-semibold text-slate-200">How to read it</p>
-          <ul className="space-y-1.5 text-xs text-slate-400">
-            <li>Each step clockwise adds a sharp (a perfect fifth up); counter-clockwise adds a flat.</li>
-            <li>
-              <span style={{ color: FUNCTION_COLORS.Tonic }}>Green</span> is your selected key (major or
-              minor). The next key <span style={{ color: FUNCTION_COLORS.Dominant }}>clockwise is its
-              Dominant (V)</span> and the next <span style={{ color: FUNCTION_COLORS.Subdominant }}>
-              counter-clockwise is its Subdominant (IV)</span> — these differ by just one note, so
-              they're the smoothest keys to modulate to.
-            </li>
-            <li>
-              <span style={{ color: "#22d3ee" }}>Teal</span> marks the relative key on the other ring —
-              it has the exact same notes (e.g. C major ↔ A minor).
-            </li>
-            <li>The inner ring is each major key's relative minor.</li>
-            <li>
-              Click any key to <span style={{ color: PREVIEW_RING }}>preview</span> modulating there — the
-              keyboard below shows shared vs. new notes. Use <span className="text-slate-300">Switch to…</span>{" "}
-              to commit.
-            </li>
-          </ul>
-        </div>
-      </aside>
-    </div>
+      <text x={C} y={C - 6} textAnchor="middle" fontSize={11} fill="#475569">
+        major
+      </text>
+      <text x={C} y={C + 8} textAnchor="middle" fontSize={11} fill="#475569">
+        minor
+      </text>
+    </svg>
   );
 }
