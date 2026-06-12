@@ -32,9 +32,11 @@ interface Props {
   onBeats: (beats: number) => void;
   /** Deselect so a brand-new chord can be built. */
   onNew: () => void;
+  /** Report the chord currently being built (for a live preview elsewhere). */
+  onDraftChange?: (c: ChordSuggestion | null) => void;
 }
 
-export default function ChordBuilder({ tonic, chord, onReplace, onAdd, onBeats, onNew }: Props) {
+export default function ChordBuilder({ tonic, chord, onReplace, onAdd, onBeats, onNew, onDraftChange }: Props) {
   const [root, setRoot] = useState(tonic);
   const [notes, setNotes] = useState<number[]>(() => [0, 4, 7].map((o) => pc(chromaOf(tonic) + o)));
   const [inversion, setInversion] = useState(0);
@@ -54,7 +56,12 @@ export default function ChordBuilder({ tonic, chord, onReplace, onAdd, onBeats, 
 
   const rootChroma = chromaOf(root);
   const builtBase = useMemo(() => buildChordFromNotes(notes, rootChroma, tonic), [notes, rootChroma, tonic]);
-  const built = builtBase ? invertChord(builtBase, inversion) : null;
+  const built = useMemo(() => (builtBase ? invertChord(builtBase, inversion) : null), [builtBase, inversion]);
+
+  // Live-preview the chord being built (used by the "+" card in the timeline).
+  useEffect(() => {
+    onDraftChange?.(built);
+  }, [built, onDraftChange]);
 
   const fit = builtBase ? chordScaleSuggestions(builtBase)[0] : null;
   const suggestions = useMemo(
@@ -135,107 +142,73 @@ export default function ChordBuilder({ tonic, chord, onReplace, onAdd, onBeats, 
         )}
       </div>
 
-      {/* Built chord readout + actions */}
-      <div className="flex flex-wrap items-center gap-3">
-        {built ? (
-          <>
-            <span className="text-sm">
-              <span className="text-slate-400">{editing ? "Editing: " : "Chord: "}</span>
-              <span className="text-lg font-bold" style={{ color: FUNCTION_COLORS[built.fn] }}>
-                {built.name}
-              </span>{" "}
-              <span className="font-mono text-xs text-slate-500">{built.label}</span>{" "}
-              <span className="text-xs text-slate-400">({built.notes.join(" ")})</span>
-            </span>
-            <button
-              onClick={() => {
-                resumeAudio();
-                playChord(built.chromas, { durationMs: 900 });
-              }}
-              className="rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
-            >
-              ▶ Hear
-            </button>
-            {!editing && (
-              <button onClick={() => onAdd(built)} className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">
-                + Add to chords
-              </button>
-            )}
-            {editing && chord && (
-              <span className="flex items-center gap-2 text-xs text-slate-400">
-                Duration
-                <button onClick={() => onBeats(chord.beats - 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">–</button>
-                <span className="w-12 text-center font-mono text-slate-100">{chord.beats}b</span>
-                <button onClick={() => onBeats(chord.beats + 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">+</button>
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="text-sm text-slate-500">Select at least two notes to form a chord.</span>
-        )}
+      {/* Two columns: [Triads / Tetrads]  ·  [Invert / Reharmonize] */}
+      <div className="flex flex-wrap gap-x-16 gap-y-4">
+        {/* Column 1 — presets */}
+        <div className="space-y-3">
+          {(["Triads", "Tetrads"] as const).map((group) => (
+            <div key={group}>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{group}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {CHORD_PRESETS.filter((p) => p.group === group).map((p) => (
+                  <button key={p.name} onClick={() => applyPreset(p.offsets)} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700">
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Column 2 — invert + reharmonize */}
+        <div className="space-y-3">
+          {builtBase && builtBase.chromas.length > 1 && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invert (bass note)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: builtBase.chromas.length }, (_, n) => n).map((n) => {
+                  const active = currentInversion(built ?? builtBase) === n;
+                  const col = FUNCTION_COLORS[builtBase.fn];
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => changeInversion(n)}
+                      className="rounded px-2 py-1 text-xs font-medium ring-1 transition hover:brightness-125"
+                      style={{
+                        backgroundColor: col + (active ? "33" : "1a"),
+                        color: col,
+                        borderColor: col,
+                        boxShadow: active ? `0 0 0 2px ${col}` : undefined,
+                      }}
+                    >
+                      {["Root pos.", "1st inv.", "2nd inv.", "3rd inv.", "4th inv."][n] ?? `inv ${n}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {builtBase && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reharmonize</div>
+              <div className="flex flex-wrap gap-1.5">
+                {substitutions(builtBase, tonic).map((s) => (
+                  <button
+                    key={s.name + s.label}
+                    onClick={() => reharm(s)}
+                    title={s.explanation}
+                    className="rounded px-2 py-1 text-xs font-medium ring-1 transition hover:brightness-125"
+                    style={{ backgroundColor: FUNCTION_COLORS[s.fn] + "1a", color: FUNCTION_COLORS[s.fn], borderColor: FUNCTION_COLORS[s.fn] }}
+                  >
+                    {s.name} <span className="opacity-60">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Presets */}
-      {(["Triads", "Tetrads"] as const).map((group) => (
-        <div key={group}>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{group}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {CHORD_PRESETS.filter((p) => p.group === group).map((p) => (
-              <button key={p.name} onClick={() => applyPreset(p.offsets)} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700">
-                {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* Inversion */}
-      {builtBase && builtBase.chromas.length > 1 && (
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invert (bass note)</div>
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: builtBase.chromas.length }, (_, n) => n).map((n) => {
-              const active = currentInversion(built ?? builtBase) === n;
-              const col = FUNCTION_COLORS[builtBase.fn];
-              return (
-                <button
-                  key={n}
-                  onClick={() => changeInversion(n)}
-                  className="rounded px-2 py-1 text-xs font-medium ring-1 transition hover:brightness-125"
-                  style={{
-                    backgroundColor: col + (active ? "33" : "1a"),
-                    color: col,
-                    borderColor: col,
-                    boxShadow: active ? `0 0 0 2px ${col}` : undefined,
-                  }}
-                >
-                  {["Root pos.", "1st inv.", "2nd inv.", "3rd inv.", "4th inv."][n] ?? `inv ${n}`}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Reharmonize */}
-      {builtBase && (
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reharmonize</div>
-          <div className="flex flex-wrap gap-1.5">
-            {substitutions(builtBase, tonic).map((s) => (
-              <button
-                key={s.name + s.label}
-                onClick={() => reharm(s)}
-                title={s.explanation}
-                className="rounded px-2 py-1 text-xs font-medium ring-1 transition hover:brightness-125"
-                style={{ backgroundColor: FUNCTION_COLORS[s.fn] + "1a", color: FUNCTION_COLORS[s.fn], borderColor: FUNCTION_COLORS[s.fn] }}
-              >
-                {s.name} <span className="opacity-60">{s.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Notes that fit a solo */}
       {built && fit && suggestions.length > 0 && (
@@ -276,6 +249,46 @@ export default function ChordBuilder({ tonic, chord, onReplace, onAdd, onBeats, 
           </div>
         </div>
       )}
+
+      {/* Built chord readout + actions (directly above the instrument) */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3">
+        {built ? (
+          <>
+            <span className="text-sm">
+              <span className="text-slate-400">{editing ? "Editing: " : "Chord: "}</span>
+              <span className="text-lg font-bold" style={{ color: FUNCTION_COLORS[built.fn] }}>
+                {built.name}
+              </span>{" "}
+              <span className="font-mono text-xs text-slate-500">{built.label}</span>{" "}
+              <span className="text-xs text-slate-400">({built.notes.join(" ")})</span>
+            </span>
+            <button
+              onClick={() => {
+                resumeAudio();
+                playChord(built.chromas, { durationMs: 900 });
+              }}
+              className="rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+            >
+              ▶ Hear
+            </button>
+            {!editing && (
+              <button onClick={() => onAdd(built)} className="rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">
+                + Add to chords
+              </button>
+            )}
+            {editing && chord && (
+              <span className="flex items-center gap-2 text-xs text-slate-400">
+                Duration
+                <button onClick={() => onBeats(chord.beats - 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">–</button>
+                <span className="w-12 text-center font-mono text-slate-100">{chord.beats}b</span>
+                <button onClick={() => onBeats(chord.beats + 1)} className="h-6 w-6 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">+</button>
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-sm text-slate-500">Select at least two notes to form a chord.</span>
+        )}
+      </div>
 
       {/* Add notes by clicking the instrument (keyboard or guitar) */}
       <div className="border-t border-slate-800 pt-3">

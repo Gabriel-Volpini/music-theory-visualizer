@@ -15,22 +15,55 @@ interface Col {
   isChordStart: boolean;
 }
 
-export default function MelodyLayer() {
-  const { tonic, scaleType, progression, melody, setMelodyNote, clearMelody } = useComposition();
+interface MelodyLayerProps {
+  /** Which chord workspace to write the melody over. */
+  source?: "canvas" | "builder";
+  /** Drop the trailing explanatory caption (used under "Your chords" in the Builder). */
+  bare?: boolean;
+  /** Playback is driven by an external transport (no own Play/BPM controls). */
+  controlled?: boolean;
+  /** Wrap in a collapsible "Melody" section, collapsed by default. */
+  collapsible?: boolean;
+  /** The currently-playing beat column when controlled (-1 = stopped). */
+  playCol?: number;
+  /** Whether the melody is muted in the external transport. */
+  muteMelody?: boolean;
+  /** Toggle the external mute. */
+  onToggleMute?: () => void;
+}
+
+export default function MelodyLayer({
+  source = "canvas",
+  bare = false,
+  controlled = false,
+  collapsible = false,
+  playCol: externalPlayCol = -1,
+  muteMelody = false,
+  onToggleMute,
+}: MelodyLayerProps) {
+  const store = useComposition();
+  const { tonic, scaleType } = store;
+  const isBuilder = source === "builder";
+  const progression = isBuilder ? store.builderChords : store.progression;
+  const melody = isBuilder ? store.builderMelody : store.melody;
+  const setMelodyNote = isBuilder ? store.setBuilderMelodyNote : store.setMelodyNote;
+  const clearMelody = isBuilder ? store.clearBuilderMelody : store.clearMelody;
   const [bpm, setBpm] = useState(180);
   const [playing, setPlaying] = useState(false);
-  const [playCol, setPlayCol] = useState(-1);
+  const [ownPlayCol, setPlayCol] = useState(-1);
+  const [open, setOpen] = useState(!collapsible);
+  const playCol = controlled ? externalPlayCol : ownPlayCol;
   const timer = useRef<number | null>(null);
 
   const scale = useMemo(() => getScale(tonic, scaleType), [tonic, scaleType]);
   const tonicChroma = chromaOf(tonic);
 
-  // Rows: two octaves of the scale, high notes on top.
+  // Rows: one octave of the scale, high notes on top.
   const rowMidis = useMemo(() => {
     const tonicMidi = 60 + pc(tonicChroma);
     const out: number[] = [];
-    for (let oct = 0; oct < 2; oct++) for (const n of scale.notes) out.push(tonicMidi + n.semitone + oct * 12);
-    out.push(tonicMidi + 24);
+    for (const n of scale.notes) out.push(tonicMidi + n.semitone);
+    out.push(tonicMidi + 12);
     return out.reverse(); // high to low
   }, [scale, tonicChroma]);
 
@@ -44,7 +77,7 @@ export default function MelodyLayer() {
   }, [progression]);
 
   useEffect(() => {
-    if (!playing || cols.length === 0) return;
+    if (controlled || !playing || cols.length === 0) return;
     let cancelled = false;
     let i = 0;
     const beatMs = 60000 / bpm;
@@ -72,15 +105,134 @@ export default function MelodyLayer() {
     };
   }, [playing, bpm, cols, melody]);
 
-  if (progression.length === 0) {
+  const empty = progression.length === 0;
+
+  const muteBtn = controlled && (
+    <button
+      onClick={onToggleMute}
+      className={
+        "rounded px-3 py-1.5 text-xs font-medium ring-1 transition " +
+        (muteMelody
+          ? "bg-slate-800 text-slate-400 ring-slate-700 hover:bg-slate-700"
+          : "bg-amber-500/20 text-amber-300 ring-amber-500/60 hover:bg-amber-500/30")
+      }
+    >
+      {muteMelody ? "🔇 Melody muted" : "🔊 Melody on"}
+    </button>
+  );
+  const clearBtn = (
+    <button onClick={clearMelody} className="rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-700">
+      Clear melody
+    </button>
+  );
+
+  const emptyMsg = (
+    <p className="py-6 text-center text-sm text-slate-500">
+      {isBuilder ? (
+        <>Add chords above first — then write a melody over them here.</>
+      ) : (
+        <>
+          Build a progression on the <span className="text-slate-300">Composition Canvas</span> first — then
+          write a melody over it here.
+        </>
+      )}
+    </p>
+  );
+
+  const gridMarkup = (
+    <div className="overflow-x-auto">
+      {/* chord header row */}
+      <div className="flex">
+        <div className="w-12 shrink-0" />
+        {cols.map((col, i) => (
+          <div
+            key={`h-${i}`}
+            className="w-7 shrink-0 text-center text-[10px]"
+            style={{
+              color: col.isChordStart ? "#cbd5e1" : "#475569",
+              borderLeft: col.isChordStart ? "1px solid #334155" : undefined,
+            }}
+          >
+            {col.isChordStart ? col.chord.name : "·"}
+          </div>
+        ))}
+      </div>
+
+      {/* grid */}
+      {rowMidis.map((m) => (
+        <div key={m} className="flex items-center">
+          <div className="w-12 shrink-0 pr-1 text-right text-[10px] text-slate-500">{midiName(m)}</div>
+          {cols.map((col, i) => {
+            const isChordTone = col.chord.chromas.map(pc).includes(pc(m));
+            const isOn = melody[i] === m;
+            const isPlay = playCol === i;
+            let bg = "#0f172a";
+            if (isOn) bg = "#fbbf24";
+            else if (isChordTone) bg = functionColor(pc(m - tonicChroma)) + "33";
+            return (
+              <button
+                key={`${m}-${i}`}
+                onClick={() => {
+                  setMelodyNote(i, isOn ? null : m);
+                  if (!isOn) {
+                    resumeAudio();
+                    playMidi(m);
+                  }
+                }}
+                className="h-6 w-7 shrink-0"
+                style={{
+                  backgroundColor: bg,
+                  borderLeft: col.isChordStart ? "1px solid #334155" : "1px solid #1e293b",
+                  borderTop: "1px solid #1e293b",
+                  outline: isPlay ? "2px solid #38bdf8" : undefined,
+                  outlineOffset: "-2px",
+                }}
+                title={midiName(m)}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+
+  const caption = !bare && (
+    <p className="text-xs text-slate-500">
+      Rows are one octave of <span className="text-slate-300">{scale.label}</span>; columns are beats.
+      Tinted cells are chord tones of the chord above (strong landing notes). Click to place one note
+      per beat; press play to hear the melody with the chords.
+    </p>
+  );
+
+  // Collapsible: one box with the "Melody" title inside; collapsing keeps the box + title.
+  if (collapsible) {
     return (
-      <div className="rounded-lg bg-slate-900/60 p-6 text-center text-sm text-slate-500 ring-1 ring-slate-800">
-        Build a progression on the <span className="text-slate-300">Composition Canvas</span> first — then
-        write a melody over it here.
+      <div className="space-y-3 rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-200 hover:text-white"
+            aria-expanded={open}
+          >
+            <span className="text-xs text-slate-500">{open ? "▾" : "▸"}</span>
+            Melody
+          </button>
+          {open && !empty && (
+            <div className="flex items-center gap-2">
+              {muteBtn}
+              {clearBtn}
+            </div>
+          )}
+        </div>
+        {open && (empty ? emptyMsg : <>{gridMarkup}{caption}</>)}
       </div>
     );
   }
 
+  // Canvas: own play header + grid box.
+  if (empty) {
+    return <div className="rounded-lg bg-slate-900/60 ring-1 ring-slate-800">{emptyMsg}</div>;
+  }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
@@ -94,71 +246,10 @@ export default function MelodyLayer() {
           <input type="range" min={50} max={200} value={bpm} onChange={(e) => setBpm(Number(e.target.value))} className="accent-sky-500" />
           <span className="w-14 font-mono text-slate-100">{bpm} BPM</span>
         </label>
-        <button onClick={clearMelody} className="ml-auto rounded bg-slate-800 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-700">
-          Clear melody
-        </button>
+        <span className="ml-auto">{clearBtn}</span>
       </div>
-
-      <div className="overflow-x-auto rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
-        {/* chord header row */}
-        <div className="flex">
-          <div className="w-12 shrink-0" />
-          {cols.map((col, i) => (
-            <div
-              key={`h-${i}`}
-              className="w-7 shrink-0 text-center text-[10px]"
-              style={{
-                color: col.isChordStart ? "#cbd5e1" : "#475569",
-                borderLeft: col.isChordStart ? "1px solid #334155" : undefined,
-              }}
-            >
-              {col.isChordStart ? col.chord.name : "·"}
-            </div>
-          ))}
-        </div>
-
-        {/* grid */}
-        {rowMidis.map((m) => (
-          <div key={m} className="flex items-center">
-            <div className="w-12 shrink-0 pr-1 text-right text-[10px] text-slate-500">{midiName(m)}</div>
-            {cols.map((col, i) => {
-              const isChordTone = col.chord.chromas.map(pc).includes(pc(m));
-              const isOn = melody[i] === m;
-              const isPlay = playCol === i;
-              let bg = "#0f172a";
-              if (isOn) bg = "#fbbf24";
-              else if (isChordTone) bg = functionColor(pc(m - tonicChroma)) + "33";
-              return (
-                <button
-                  key={`${m}-${i}`}
-                  onClick={() => {
-                    setMelodyNote(i, isOn ? null : m);
-                    if (!isOn) {
-                      resumeAudio();
-                      playMidi(m);
-                    }
-                  }}
-                  className="h-6 w-7 shrink-0"
-                  style={{
-                    backgroundColor: bg,
-                    borderLeft: col.isChordStart ? "1px solid #334155" : "1px solid #1e293b",
-                    borderTop: "1px solid #1e293b",
-                    outline: isPlay ? "2px solid #38bdf8" : undefined,
-                    outlineOffset: "-2px",
-                  }}
-                  title={midiName(m)}
-                />
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      <p className="text-xs text-slate-500">
-        Rows are two octaves of <span className="text-slate-300">{scale.label}</span>; columns are beats.
-        Tinted cells are chord tones of the chord above (strong landing notes). Click to place one note
-        per beat; press play to hear the melody with the chords.
-      </p>
+      <div className="rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">{gridMarkup}</div>
+      {caption}
     </div>
   );
 }

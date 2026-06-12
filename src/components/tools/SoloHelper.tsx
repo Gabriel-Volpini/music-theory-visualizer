@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { useComposition } from "../../store/composition";
 import { diatonicChords, getScale } from "../../theory/scales";
 import { suggestNextNotes } from "../../theory/solo";
+import { modulationSuggestions } from "../../theory/progression";
 import Instruments from "../Instruments";
 import Legend from "../Legend";
-import { CATEGORY_COLORS, CATEGORY_LABELS, soloHighlights } from "../palette";
+import { CATEGORY_COLORS, CATEGORY_LABELS, FUNCTION_COLORS, soloHighlights } from "../palette";
 import type { SoloCategory } from "../../theory/solo";
 
 const LEGEND_ORDER: SoloCategory[] = ["chord-tone", "step", "color", "avoid", "scale"];
@@ -17,10 +18,13 @@ export default function SoloHelper() {
     setCurrentChordIndex,
     selectedChroma,
     setSelectedChroma,
+    setKey,
+    setTool,
   } = useComposition();
 
   const scale = useMemo(() => getScale(tonic, scaleType), [tonic, scaleType]);
   const chords = useMemo(() => diatonicChords(scale), [scale]);
+  const mods = useMemo(() => modulationSuggestions(tonic, scaleType), [tonic, scaleType]);
   const chord =
     currentChordIndex != null && chords[currentChordIndex]
       ? chords[currentChordIndex]
@@ -120,6 +124,49 @@ export default function SoloHelper() {
               </li>
             ))}
           </ol>
+        </div>
+
+        <div className="rounded-lg bg-slate-900/60 p-4 ring-1 ring-slate-800">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-200">Modulation</h3>
+            <button
+              onClick={() => setTool("modulation")}
+              className="text-[11px] text-sky-400 hover:text-sky-300"
+            >
+              Open Modulation →
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Related keys you can move to — click one to set it as the key and keep soloing over it.
+          </p>
+          {mods.length === 0 ? (
+            <p className="text-xs text-slate-600">Pick a 7-note scale to see modulation targets.</p>
+          ) : (
+            <ol className="space-y-1.5">
+              {mods.map((s) => {
+                const color = FUNCTION_COLORS[s.fn];
+                return (
+                  <li key={s.name + s.label}>
+                    <button
+                      onClick={() => s.modulateTo && setKey(s.modulateTo.tonic, s.modulateTo.type)}
+                      title={s.explanation}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition hover:bg-slate-800"
+                    >
+                      <span
+                        className="inline-block h-3 w-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="w-20 shrink-0 font-semibold text-white">
+                        {s.modulateTo ? `${s.modulateTo.tonic} ${s.modulateTo.type}` : s.name}
+                      </span>
+                      <span className="flex-1 text-xs text-slate-400">{s.explanation}</span>
+                      <span className="font-mono text-xs text-slate-500">{s.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
         </div>
       </aside>
     </div>

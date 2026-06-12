@@ -107,6 +107,8 @@ export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardP
       {/* strings + note dots */}
       {OPEN_MIDI.map((open, s) => {
         const y = stringY(s);
+        const openChroma = open % 12;
+        const labelColor = scaleSet.has(openChroma) ? fnColor(openChroma) : "#9ca3af";
         return (
           <g key={`string-${s}`}>
             <line
@@ -117,10 +119,10 @@ export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardP
               stroke="#9b8466"
               strokeWidth={1 + s * 0.4}
             />
-            <text x={14} y={y + 4} textAnchor="middle" fontSize={12} fill="#9ca3af">
+            <text x={14} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fill={labelColor}>
               {STRING_LABELS[s]}
             </text>
-            {Array.from({ length: frets + 1 }, (_, f) => f).map((f) => {
+            {Array.from({ length: frets }, (_, f) => f + 1).map((f) => {
               const chroma = (open + f) % 12;
               const hl = highlights.get(chroma);
               const cx = dotX(f);

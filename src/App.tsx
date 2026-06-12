@@ -3,47 +3,35 @@ import ScalePicker from "./components/ScalePicker";
 import ScaleVisualizer from "./components/tools/ScaleVisualizer";
 import SoloHelper from "./components/tools/SoloHelper";
 import ModulationTool from "./components/tools/ModulationTool";
-import CompositionCanvas from "./components/tools/CompositionCanvas";
 import ChordSoloBuilder from "./components/tools/ChordSoloBuilder";
 import CircleOfFifths from "./components/tools/CircleOfFifths";
-import MelodyLayer from "./components/tools/MelodyLayer";
 import IntervalVisualizer from "./components/tools/IntervalVisualizer";
 
 const TABS: { id: ToolId; label: string; blurb: string }[] = [
-  { id: "scale", label: "Scale Visualizer", blurb: "See a scale on both instruments, with a tonal or modal lens." },
-  { id: "circle", label: "Circle of Fifths", blurb: "See how keys relate; click any key to make it the project key." },
   { id: "interval", label: "Interval", blurb: "Click two notes to measure the interval, its size and consonance." },
+  { id: "scale", label: "Scales", blurb: "See a scale on both instruments, with a tonal or modal lens." },
+  { id: "modulation", label: "Modulation", blurb: "See how keys relate on the circle of fifths, then find where to go next and the pivot chords that bridge the two keys." },
   { id: "solo", label: "Solo Helper", blurb: "Get ranked next-note suggestions over the active chord." },
-  { id: "modulation", label: "Modulation", blurb: "Find where to go next and the pivot chords that bridge the two keys." },
-  { id: "canvas", label: "Composition Canvas", blurb: "Build a progression with chord suggestions, then write a melody over it on the piano-roll below." },
-  { id: "builder", label: "Chord Builder", blurb: "Create chords from suggestions or note-by-note, then edit them — add 7ths, invert, reharmonize." },
+  { id: "builder", label: "Builder", blurb: "" },
 ];
 
 function ToolView({ tool }: { tool: ToolId }) {
   switch (tool) {
-    case "canvas":
-      return (
-        <div className="space-y-8">
-          <CompositionCanvas />
-          <section className="border-t border-slate-800 pt-6">
-            <h2 className="mb-1 text-lg font-bold text-white">Melody Layer</h2>
-            <p className="mb-4 text-sm text-slate-400">
-              Write a melody on the piano-roll over the progression above.
-            </p>
-            <MelodyLayer />
-          </section>
-        </div>
-      );
     case "builder":
       return <ChordSoloBuilder />;
-    case "circle":
-      return <CircleOfFifths />;
     case "interval":
       return <IntervalVisualizer />;
     case "solo":
       return <SoloHelper />;
     case "modulation":
-      return <ModulationTool />;
+      return (
+        <div className="space-y-8">
+          <CircleOfFifths />
+          <section className="border-t border-slate-800 pt-6">
+            <ModulationTool />
+          </section>
+        </div>
+      );
     case "scale":
     default:
       return <ScaleVisualizer />;
@@ -61,9 +49,6 @@ export default function App() {
           <h1 className="text-xl font-bold tracking-tight">
             🎵 Music Theory Visualizer
           </h1>
-          <p className="mt-0.5 text-sm text-slate-400">
-            Pick a key and scale once — every tool stays in sync.
-          </p>
 
           <div className="mt-5">
             <ScalePicker />
@@ -89,13 +74,9 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-6">
-        <p className="mb-5 text-sm text-slate-400">{active.blurb}</p>
+        {active.blurb && <p className="mb-5 text-sm text-slate-400">{active.blurb}</p>}
         <ToolView tool={tool} />
       </main>
-
-      <footer className="mx-auto max-w-6xl px-6 py-8 text-xs text-slate-600">
-        The Composition Canvas and Builder play piano via the Web Audio API.
-      </footer>
     </div>
   );
 }

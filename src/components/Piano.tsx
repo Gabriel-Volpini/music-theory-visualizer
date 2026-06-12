@@ -29,11 +29,18 @@ const TOP = 12;
 const GRAY_BG = "#1e293b";
 const pc = (c: number) => ((c % 12) + 12) % 12;
 
-export default function Piano({ highlights, onPick, octaves = 2, plain }: PianoProps) {
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+
+export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoProps) {
   const { tonic, scaleType } = useComposition();
   const tonicChroma = chromaOf(tonic);
-  const scaleSet = getScale(tonic, scaleType).chromaSet;
+  const scale = getScale(tonic, scaleType);
+  const scaleSet = scale.chromaSet;
   const fnColor = (chroma: number) => functionColor(pc(chroma - tonicChroma));
+
+  // Scale-degree numeral (I, II, III…) for each note in the scale.
+  const degreeOf = new Map<number, string>();
+  scale.notes.forEach((n, i) => degreeOf.set(n.chroma, ROMAN[i] ?? String(i + 1)));
 
   const whitesPerOctave = 7;
   const totalWhites = octaves * whitesPerOctave;
@@ -60,6 +67,7 @@ export default function Piano({ highlights, onPick, octaves = 2, plain }: PianoP
     }
 
     const cy = isWhite ? TOP + WHITE_H - 26 : TOP + BLACK_H - 20;
+    const degree = !plain && inScale ? degreeOf.get(chroma) : undefined;
     return (
       <g
         key={`c-${cx}`}
@@ -67,6 +75,18 @@ export default function Piano({ highlights, onPick, octaves = 2, plain }: PianoP
         style={{ cursor: onPick ? "pointer" : "default" }}
         opacity={hl?.dim ? 0.55 : 1}
       >
+        {degree && (
+          <text
+            x={cx}
+            y={isWhite ? TOP + 13 : TOP + 12}
+            textAnchor="middle"
+            fontSize={9}
+            fontWeight={700}
+            fill={isWhite ? "#64748b" : "#cbd5e1"}
+          >
+            {degree}
+          </text>
+        )}
         {hl?.ring && <circle cx={cx} cy={cy} r={15} fill="none" stroke={isWhite ? "#111" : "#fff"} strokeWidth={2} />}
         <circle cx={cx} cy={cy} r={12} fill={bg} stroke={border} strokeWidth={2} />
         <text x={cx} y={cy + 4} textAnchor="middle" fontSize={10} fontWeight={600} fill={font}>

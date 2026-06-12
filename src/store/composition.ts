@@ -38,6 +38,8 @@ interface CompositionState {
   solo: Record<string, number[]>;
   /** Melody over the canvas progression (beat column -> MIDI note). */
   melody: Record<number, number>;
+  /** Melody over the Chord Builder's chords (beat column -> MIDI note). */
+  builderMelody: Record<number, number>;
   /** Active tool tab. */
   tool: ToolId;
 
@@ -70,12 +72,17 @@ interface CompositionState {
   removeBuilderChordAt: (i: number) => void;
   clearBuilder: () => void;
   setBuilderSelected: (i: number | null) => void;
+  /** Replace the whole builder workspace (import). */
+  loadBuilder: (chords: Array<ChordSuggestion & { beats?: number }>) => void;
   /** Toggle a note in the solo line over a given chord (by chord uid). */
   toggleSoloNote: (uid: string, chroma: number) => void;
 
   /** Set (or clear, with null) the melody note at a beat column. */
   setMelodyNote: (col: number, midi: number | null) => void;
   clearMelody: () => void;
+  /** Builder melody equivalents. */
+  setBuilderMelodyNote: (col: number, midi: number | null) => void;
+  clearBuilderMelody: () => void;
 }
 
 const DEFAULT_BEATS = 4;
@@ -92,6 +99,7 @@ export const useComposition = create<CompositionState>((set) => ({
   builderSelected: null,
   solo: {},
   melody: {},
+  builderMelody: {},
   tool: "scale",
 
   setTonic: (tonic) => set({ tonic, currentChordIndex: null, selectedChroma: null }),
@@ -181,6 +189,13 @@ export const useComposition = create<CompositionState>((set) => ({
     }),
   clearBuilder: () => set({ builderChords: [], builderSelected: null, solo: {} }),
   setBuilderSelected: (builderSelected) => set({ builderSelected }),
+  loadBuilder: (chords) =>
+    set({
+      builderChords: chords.map((c) => ({ ...c, uid: nextUid(), beats: c.beats ?? DEFAULT_BEATS })),
+      builderSelected: chords.length ? 0 : null,
+      builderMelody: {},
+      solo: {},
+    }),
   toggleSoloNote: (uid, chroma) =>
     set((s) => {
       const current = s.solo[uid] ?? [];
@@ -198,4 +213,13 @@ export const useComposition = create<CompositionState>((set) => ({
       return { melody };
     }),
   clearMelody: () => set({ melody: {} }),
+
+  setBuilderMelodyNote: (col, midi) =>
+    set((s) => {
+      const builderMelody = { ...s.builderMelody };
+      if (midi == null) delete builderMelody[col];
+      else builderMelody[col] = midi;
+      return { builderMelody };
+    }),
+  clearBuilderMelody: () => set({ builderMelody: {} }),
 }));
