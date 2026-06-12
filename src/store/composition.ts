@@ -40,6 +40,8 @@ interface CompositionState {
   melody: Record<number, number>;
   /** Melody over the Chord Builder's chords (beat column -> MIDI note). */
   builderMelody: Record<number, number>;
+  /** Modulation tab: the key being previewed (from the circle / target list). */
+  modPreview: { tonic: string; type: string } | null;
   /** Active tool tab. */
   tool: ToolId;
 
@@ -50,6 +52,7 @@ interface CompositionState {
   setLens: (l: Lens) => void;
   setCurrentChordIndex: (i: number | null) => void;
   setSelectedChroma: (c: number | null) => void;
+  setModPreview: (t: { tonic: string; type: string } | null) => void;
   setTool: (t: ToolId) => void;
 
   addChord: (c: ChordSuggestion) => void;
@@ -100,16 +103,18 @@ export const useComposition = create<CompositionState>((set) => ({
   solo: {},
   melody: {},
   builderMelody: {},
-  tool: "scale",
+  modPreview: null,
+  tool: "interval",
 
   setTonic: (tonic) => set({ tonic, currentChordIndex: null, selectedChroma: null }),
   setScaleType: (scaleType) =>
     set({ scaleType, currentChordIndex: null, selectedChroma: null }),
   setKey: (tonic, scaleType) =>
-    set({ tonic, scaleType, currentChordIndex: null, selectedChroma: null }),
+    set({ tonic, scaleType, currentChordIndex: null, selectedChroma: null, modPreview: null }),
   setLens: (lens) => set({ lens }),
   setCurrentChordIndex: (currentChordIndex) => set({ currentChordIndex }),
   setSelectedChroma: (selectedChroma) => set({ selectedChroma }),
+  setModPreview: (modPreview) => set({ modPreview }),
   setTool: (tool) => set({ tool }),
 
   addChord: (c) =>

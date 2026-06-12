@@ -133,9 +133,14 @@ export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardP
               let border = "#475569";
               let font = "#94a3b8";
               if (hl) {
-                bg = hl.color;
-                border = hl.color;
-                font = "#0b0b0b";
+                if (hl.outline) {
+                  border = hl.color;
+                  font = hl.color;
+                } else {
+                  bg = hl.color;
+                  border = hl.color;
+                  font = "#0b0b0b";
+                }
               } else if (inScale) {
                 border = fc;
                 font = fc;
@@ -147,11 +152,15 @@ export default function Fretboard({ highlights, onPick, frets = 15 }: FretboardP
                   style={{ cursor: onPick ? "pointer" : "default" }}
                   opacity={hl?.dim ? 0.5 : hl || inScale ? 1 : 0.5}
                 >
+                  {hl?.title && <title>{hl.title}</title>}
                   {hl?.ring && <circle cx={cx} cy={y} r={15} fill="none" stroke="#fff" strokeWidth={2} />}
                   <circle cx={cx} cy={y} r={12} fill={bg} stroke={border} strokeWidth={2} />
                   <text x={cx} y={y + 4} textAnchor="middle" fontSize={10} fontWeight={600} fill={font}>
                     {hl?.label ?? fallbackName(chroma)}
                   </text>
+                  {hl?.dash && (
+                    <rect x={cx - 7} y={y - 20} width={14} height={3} rx={1.5} fill="#e2e8f0" />
+                  )}
                   {hl?.sub && (
                     <text x={cx} y={y - 17} textAnchor="middle" fontSize={9} fill="#cbd5e1">
                       {hl.sub}

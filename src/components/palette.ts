@@ -40,6 +40,12 @@ export interface NoteHighlight {
   dim?: boolean;
   /** Tiny caption under the note (e.g. score or role). */
   sub?: string;
+  /** Native hover tooltip text. */
+  title?: string;
+  /** Render hollow (colored border only, no solid fill) — e.g. a soloable note. */
+  outline?: boolean;
+  /** Draw a small dash marker above the note — e.g. "can modulate". */
+  dash?: boolean;
 }
 
 export const COLOR_TONE = "#ec4899"; // pink — modal characteristic tone
@@ -50,11 +56,11 @@ export const CATEGORY_COLORS: Record<SoloCategory, string> = {
   step: "#3b82f6", // blue — smooth motion
   color: "#ec4899", // pink — modal color
   avoid: "#ef4444", // red — tension
-  scale: "#64748b", // slate — neutral
+  scale: "#14b8a6", // teal — in-scale, safe & neutral (not gray = that's out-of-scale)
 };
 
 export const CATEGORY_LABELS: Record<SoloCategory, string> = {
-  "chord-tone": "Chord tone (land here)",
+  "chord-tone": "Chord note (the chord itself)",
   step: "Stepwise (smooth)",
   color: "Color tone",
   avoid: "Avoid / tension",
@@ -101,11 +107,12 @@ export function soloHighlights(
 ): Map<number, NoteHighlight> {
   const map = new Map<number, NoteHighlight>();
   for (const s of suggestions) {
+    const isChord = s.category === "chord-tone"; // a note that belongs to the active chord
     map.set(s.chroma, {
       color: CATEGORY_COLORS[s.category],
-      dim: s.score < 0.5,
-      ring: s.stepwise,
-      sub: `${Math.round(s.score * 100)}`,
+      // Ring + "chord" tag distinguishes the chord itself from the notes you solo with.
+      ring: isChord,
+      sub: isChord ? "chord" : undefined,
       label: s.note,
     });
   }

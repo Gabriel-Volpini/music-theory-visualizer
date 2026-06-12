@@ -46,9 +46,14 @@ export default function App() {
     <div className="min-h-full bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/40">
         <div className="mx-auto max-w-6xl px-6 pt-5">
-          <h1 className="text-xl font-bold tracking-tight">
-            🎵 Music Theory Visualizer
-          </h1>
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="Music Theory Visualizer logo"
+              className="h-11 w-11 rounded-lg object-cover ring-1 ring-slate-800"
+            />
+            <h1 className="text-xl font-bold tracking-tight">Music Theory Visualizer</h1>
+          </div>
 
           <div className="mt-5">
             <ScalePicker />

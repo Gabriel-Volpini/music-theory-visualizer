@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useComposition } from "../../store/composition";
-import { getScale } from "../../theory/scales";
+import { chromaOf, getScale } from "../../theory/scales";
 import { suggestModulations } from "../../theory/modulation";
 import Instruments from "../Instruments";
 import Legend from "../Legend";
@@ -21,15 +21,13 @@ function relationshipColor(rel: string): string {
 }
 
 export default function ModulationTool() {
-  const { tonic, scaleType, setKey } = useComposition();
-  const [selected, setSelected] = useState<number | null>(null);
+  const { tonic, scaleType, setKey, modPreview, setModPreview } = useComposition();
 
   const source = useMemo(() => getScale(tonic, scaleType), [tonic, scaleType]);
   const targets = useMemo(() => suggestModulations(tonic, scaleType), [tonic, scaleType]);
-  const target = selected != null ? targets[selected] : null;
   const targetScale = useMemo(
-    () => (target ? getScale(target.tonic, target.type) : null),
-    [target]
+    () => (modPreview ? getScale(modPreview.tonic, modPreview.type) : null),
+    [modPreview]
   );
 
   const highlights = useMemo(
@@ -37,27 +35,51 @@ export default function ModulationTool() {
     [source, targetScale]
   );
 
-  // Reset selection if the source key changed out from under us.
-  if (selected != null && selected >= targets.length) setSelected(null);
+  // A list row is "active" when it matches the previewed key (match by pitch, not spelling).
+  const isActive = (t: { tonic: string; type: string }) =>
+    modPreview != null && chromaOf(modPreview.tonic) === chromaOf(t.tonic) && modPreview.type === t.type;
+  const toggle = (t: { tonic: string; type: string }) =>
+    setModPreview(isActive(t) ? null : { tonic: t.tonic, type: t.type });
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
       <div className="space-y-4">
         <Instruments highlights={highlights} />
-        {target ? (
-          <Legend
-            title="Comparison"
-            items={[
-              { color: SHARED_TONE, label: "Shared (pivot freely)" },
-              { color: NEW_TONE, label: "New in target key", ring: true },
-              { color: LEAVING_TONE, label: "Leaving (only in current)" },
-            ]}
-          />
+        {targetScale && modPreview ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/60 p-3 ring-1 ring-slate-800">
+              <span className="text-sm text-slate-300">
+                Previewing <span className="font-semibold text-white">{targetScale.label}</span>
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => setKey(modPreview.tonic, modPreview.type)}
+                  className="rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+                >
+                  Switch to it →
+                </button>
+                <button
+                  onClick={() => setModPreview(null)}
+                  className="rounded bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <Legend
+              title="Comparison"
+              items={[
+                { color: SHARED_TONE, label: "Shared (pivot freely)" },
+                { color: NEW_TONE, label: "New in target key", ring: true },
+                { color: LEAVING_TONE, label: "Leaving (only in current)" },
+              ]}
+            />
+          </div>
         ) : (
           <p className="text-sm text-slate-400">
             Showing <span className="font-semibold text-white">{source.label}</span>. Pick a
-            destination on the right to see shared vs. new notes and the pivot chords that bridge
-            the two keys.
+            destination on the right — or click a key on the circle above — to see shared vs. new
+            notes and the pivot chords that bridge the two keys.
           </p>
         )}
       </div>
@@ -73,12 +95,12 @@ export default function ModulationTool() {
         </div>
 
         <ul className="space-y-2">
-          {targets.map((t, i) => {
-            const active = selected === i;
+          {targets.map((t) => {
+            const active = isActive(t);
             return (
               <li key={`${t.tonic}-${t.type}`}>
                 <button
-                  onClick={() => setSelected(active ? null : i)}
+                  onClick={() => toggle(t)}
                   className={
                     "w-full rounded-lg p-3 text-left ring-1 transition " +
                     (active
@@ -142,7 +164,6 @@ export default function ModulationTool() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setKey(t.tonic, t.type);
-                          setSelected(null);
                         }}
                         className="mt-1 w-full rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
                       >

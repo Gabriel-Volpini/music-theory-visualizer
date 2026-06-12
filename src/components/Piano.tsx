@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useComposition } from "../store/composition";
 import { chromaOf, getScale } from "../theory/scales";
 import { functionColor, type NoteHighlight } from "./palette";
@@ -32,6 +33,7 @@ const pc = (c: number) => ((c % 12) + 12) % 12;
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 
 export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoProps) {
+  const [hoverChroma, setHoverChroma] = useState<number | null>(null);
   const { tonic, scaleType } = useComposition();
   const tonicChroma = chromaOf(tonic);
   const scale = getScale(tonic, scaleType);
@@ -50,7 +52,9 @@ export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoP
   // The note circle for a key — three states: selected / in-scale / out-of-scale.
   const renderCircle = (chroma: number, cx: number, isWhite: boolean) => {
     const hl = highlights.get(chroma);
-    if (!hl && plain) return null;
+    const isHover = hoverChroma === chroma;
+    // In plain mode, blank keys reveal their name on hover.
+    if (!hl && plain && !isHover) return null;
 
     const inScale = scaleSet.has(chroma);
     const fc = fnColor(chroma);
@@ -58,10 +62,16 @@ export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoP
     let border = "#475569";
     let font = "#64748b";
     if (hl) {
-      bg = hl.color;
-      border = hl.color;
-      font = "#0b0b0b";
-    } else if (inScale) {
+      if (hl.outline) {
+        // hollow — colored border only (e.g. a soloable / modulation note)
+        border = hl.color;
+        font = hl.color;
+      } else {
+        bg = hl.color;
+        border = hl.color;
+        font = "#0b0b0b";
+      }
+    } else if (inScale && !plain) {
       border = fc;
       font = fc;
     }
@@ -73,8 +83,13 @@ export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoP
         key={`c-${cx}`}
         onClick={() => onPick?.(chroma)}
         style={{ cursor: onPick ? "pointer" : "default" }}
-        opacity={hl?.dim ? 0.55 : 1}
+        opacity={hl?.dim ? 0.55 : !hl && isHover ? 0.7 : 1}
+        pointerEvents="none"
       >
+        {hl?.title && <title>{hl.title}</title>}
+        {hl?.dash && (
+          <rect x={cx - 7} y={cy - 20} width={14} height={3} rx={1.5} fill={isWhite ? "#111" : "#fff"} />
+        )}
         {degree && (
           <text
             x={cx}
@@ -118,6 +133,8 @@ export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoP
             fill="#e2e8f0"
             stroke="none"
             onClick={() => onPick?.(chroma)}
+            onMouseEnter={() => setHoverChroma(chroma)}
+            onMouseLeave={() => setHoverChroma((c) => (c === chroma ? null : c))}
             style={{ cursor: onPick ? "pointer" : "default" }}
           />
         );
@@ -146,6 +163,8 @@ export default function Piano({ highlights, onPick, octaves = 1, plain }: PianoP
               fill="#111827"
               stroke="none"
               onClick={() => onPick?.(b.chroma)}
+              onMouseEnter={() => setHoverChroma(b.chroma)}
+              onMouseLeave={() => setHoverChroma((c) => (c === b.chroma ? null : c))}
               style={{ cursor: onPick ? "pointer" : "default" }}
             />
           );

@@ -13,10 +13,21 @@ const C = SIZE / 2;
 const R_MAJOR = 150;
 const R_MINOR = 96;
 
+const PREVIEW_RING = "#f59e0b"; // amber — the key being previewed on the keyboard
+
 export default function CircleOfFifths() {
-  const { tonic, scaleType, setKey } = useComposition();
+  const { tonic, scaleType, modPreview, setModPreview } = useComposition();
   const tonicChroma = chromaOf(tonic);
   const isMajorKey = MAJOR_FAMILY.has(scaleType);
+
+  // Click a key to preview modulating there on the keyboard below (toggle off if re-clicked).
+  const preview = (chroma: number, type: "major" | "minor") => {
+    const t = TONICS[chroma];
+    if (modPreview && modPreview.tonic === t && modPreview.type === type) setModPreview(null);
+    else setModPreview({ tonic: t, type });
+  };
+  const isPreview = (chroma: number, type: "major" | "minor") =>
+    modPreview != null && chromaOf(modPreview.tonic) === chroma && modPreview.type === type;
 
   const majorChromas = MAJORS.map(chromaOf);
   const minorChromas = MINORS.map(chromaOf);
@@ -72,14 +83,23 @@ export default function CircleOfFifths() {
             const { x, y } = pos(i, R_MAJOR);
             const fill = majorFill(i);
             const active = isMajorKey && i === activeIndex;
+            const previewing = isPreview(majorChromas[i], "major");
             const textColor = textFor(fill);
             return (
               <g
                 key={`maj-${name}`}
-                onClick={() => setKey(TONICS[majorChromas[i]], "major")}
+                onClick={() => preview(majorChromas[i], "major")}
                 style={{ cursor: "pointer" }}
               >
-                <circle cx={x} cy={y} r={24} fill={fill} stroke={active ? "#fff" : "#334155"} strokeWidth={active ? 3 : 1} />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={24}
+                  fill={fill}
+                  stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
+                  strokeWidth={active || previewing ? 3 : 1}
+                  strokeDasharray={previewing ? "4 3" : undefined}
+                />
                 <text x={x} y={y + 5} textAnchor="middle" fontSize={16} fontWeight={700} fill={textColor}>
                   {name}
                 </text>
@@ -91,14 +111,23 @@ export default function CircleOfFifths() {
             const { x, y } = pos(i, R_MINOR);
             const fill = minorFill(i);
             const active = !isMajorKey && i === activeIndex;
+            const previewing = isPreview(minorChromas[i], "minor");
             const textColor = textFor(fill);
             return (
               <g
                 key={`min-${name}`}
-                onClick={() => setKey(TONICS[minorChromas[i]], "minor")}
+                onClick={() => preview(minorChromas[i], "minor")}
                 style={{ cursor: "pointer" }}
               >
-                <circle cx={x} cy={y} r={19} fill={fill} stroke={active ? "#fff" : "#334155"} strokeWidth={active ? 3 : 1} />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={19}
+                  fill={fill}
+                  stroke={active ? "#fff" : previewing ? PREVIEW_RING : "#334155"}
+                  strokeWidth={active || previewing ? 3 : 1}
+                  strokeDasharray={previewing ? "4 3" : undefined}
+                />
                 <text x={x} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fill={textColor}>
                   {name}m
                 </text>
@@ -144,7 +173,11 @@ export default function CircleOfFifths() {
               it has the exact same notes (e.g. C major ↔ A minor).
             </li>
             <li>The inner ring is each major key's relative minor.</li>
-            <li>Click any key to make it the project key — every tool follows.</li>
+            <li>
+              Click any key to <span style={{ color: PREVIEW_RING }}>preview</span> modulating there — the
+              keyboard below shows shared vs. new notes. Use <span className="text-slate-300">Switch to…</span>{" "}
+              to commit.
+            </li>
           </ul>
         </div>
       </aside>
